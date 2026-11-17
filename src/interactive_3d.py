@@ -36,6 +36,7 @@ def create_interactive_3d(
         ("elbow", "Elbow pitch", -np.pi, np.pi, 0.12),
     )
     sliders: dict[str, Slider] = {}
+
     for key, label, lower, upper, vertical_position in slider_specs:
         slider_axis = figure.add_axes((0.20, vertical_position, 0.68, 0.03))
         sliders[key] = Slider(slider_axis, label, lower, upper, valinit=0.0)
@@ -45,13 +46,21 @@ def create_interactive_3d(
 
     def update(_: float | None = None) -> None:
         joint_angles = np.array(
-            [sliders["yaw"].val, sliders["shoulder"].val, sliders["elbow"].val]
+            [
+                sliders["yaw"].val,
+                sliders["shoulder"].val,
+                sliders["elbow"].val,
+            ]
         )
         positions, _ = forward_kinematics_3d(joint_angles, lengths)
+
         _draw_arm(arm_axis, positions, lengths)
+
         position_label.set_text(
             "End-effector position: "
-            f"x={positions[-1, 0]:.3f}, y={positions[-1, 1]:.3f}, z={positions[-1, 2]:.3f}"
+            f"x={positions[-1, 0]:.3f}, "
+            f"y={positions[-1, 1]:.3f}, "
+            f"z={positions[-1, 2]:.3f}"
         )
         figure.canvas.draw_idle()
 
@@ -65,17 +74,22 @@ def create_interactive_3d(
     reset_button.on_clicked(reset)
     update()
 
-    # Keep callback widgets reachable for the lifetime of the figure.
     figure._interactive_controls = {  # type: ignore[attr-defined]
         "sliders": sliders,
         "reset_button": reset_button,
     }
+
     return figure, arm_axis, sliders
 
 
-def _draw_arm(arm_axis, positions: np.ndarray, link_lengths: np.ndarray) -> None:
+def _draw_arm(
+    arm_axis,
+    positions: np.ndarray,
+    link_lengths: np.ndarray,
+) -> None:
     """Redraw the arm and preserve equal-scale XYZ bounds."""
     arm_axis.clear()
+
     arm_axis.plot(
         positions[:, 0],
         positions[:, 1],
@@ -86,23 +100,44 @@ def _draw_arm(arm_axis, positions: np.ndarray, link_lengths: np.ndarray) -> None
         markersize=8,
         label="Arm links",
     )
-    arm_axis.scatter(*positions[0], color="#212121", s=65, label="Base")
-    arm_axis.scatter(*positions[-1], color="#d32f2f", s=75, label="End effector")
-    end_effector = positions[-1]
-    arm_axis.text(
-        *end_effector,
-        "  End effector\n"
-        f"  ({end_effector[0]:.3f}, {end_effector[1]:.3f}, {end_effector[2]:.3f})",
-        color="#b71c1c",
-        fontsize=9,
+
+    arm_axis.scatter(
+        *positions[0],
+        color="#212121",
+        s=65,
+        label="Base",
     )
+    arm_axis.scatter(
+        *positions[-1],
+        color="#d32f2f",
+        s=75,
+        label="End effector",
+    )
+
+    joint_names = ("Base", "Shoulder", "Elbow", "End effector")
+
+    for joint_name, position in zip(joint_names, positions):
+        color = "#b71c1c" if joint_name == "End effector" else "#102a43"
+
+        arm_axis.text(
+            *position,
+            f"  {joint_name}\n"
+            f"  ({position[0]:.3f}, {position[1]:.3f}, {position[2]:.3f})",
+            color=color,
+            fontsize=8,
+        )
 
     reach = float(np.sum(link_lengths))
     center = (np.min(positions, axis=0) + np.max(positions, axis=0)) / 2
-    half_span = max(float(np.ptp(positions, axis=0).max()) / 2, reach * 0.35) + 0.2
+    half_span = (
+        max(float(np.ptp(positions, axis=0).max()) / 2, reach * 0.35)
+        + 0.2
+    )
+
     arm_axis.set_xlim(center[0] - half_span, center[0] + half_span)
     arm_axis.set_ylim(center[1] - half_span, center[1] + half_span)
     arm_axis.set_zlim(center[2] - half_span, center[2] + half_span)
+
     arm_axis.set_box_aspect((1, 1, 1))
     arm_axis.set_xlabel("X position")
     arm_axis.set_ylabel("Y position")
@@ -114,7 +149,9 @@ def _draw_arm(arm_axis, positions: np.ndarray, link_lengths: np.ndarray) -> None
 
 def main() -> None:
     """Launch the interactive slider interface."""
-    parser = argparse.ArgumentParser(description="Interactively control a spatial 3R arm.")
+    parser = argparse.ArgumentParser(
+        description="Interactively control a spatial 3R arm."
+    )
     parser.add_argument(
         "--lengths",
         type=float,
@@ -123,7 +160,9 @@ def main() -> None:
         metavar=("BASE_HEIGHT", "UPPER_ARM", "FOREARM"),
         help="positive base-height, upper-arm, and forearm lengths",
     )
+
     arguments = parser.parse_args()
+
     create_interactive_3d(arguments.lengths)
     plt.show()
 
